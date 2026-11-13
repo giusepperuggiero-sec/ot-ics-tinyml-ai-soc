@@ -19,7 +19,7 @@ INJECTION_TEXT = (
 
 def get_trojan_payload():
     """Build a physically consistent telemetry payload carrying a prompt-injection string in timestamp."""
-    payload_strutturato = {
+    structured_payload = {
         "timestamp": INJECTION_TEXT,
         "sensori": {
             "S1_Pompa_RPM": 2900.0,
@@ -34,14 +34,14 @@ def get_trojan_payload():
             "S10_Efficienza_Pct": 88.0,
         },
     }
-    return json.dumps(payload_strutturato)
+    return json.dumps(structured_payload)
 
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("🔴 Red Team: Connesso! Infiltrazione Trojan (Prompt Injection) in corso...")
+        print("[RED TEAM] Connected! Launching Trojan prompt-injection infiltration...")
     else:
-        print(f"Errore connessione: {rc}")
+        print(f"[ERROR] MQTT connection failed (rc={rc})")
 
 
 def main():
@@ -53,15 +53,15 @@ def main():
     parser.add_argument("--interval", type=float, default=5.0)
     args = parser.parse_args()
 
-    client = create_mqtt_client(client_id="RedTeam_Prompt_Injector")
+    client = create_mqtt_client(client_id="RedTeam_Prompt_Injector", cfg=cfg)
     client.on_connect = on_connect
 
-    print(f"Connessione a {args.broker}...")
+    print(f"Connecting to {args.broker}...")
     client.connect(args.broker, args.port, 60)
     client.loop_start()
 
     try:
-        print("🔥 LANCIATO ATTACCO DI PROMPT INJECTION 🔥")
+        print("[ATTACK] PROMPT INJECTION CAMPAIGN STARTED")
         time.sleep(2)
 
         while True:
@@ -70,7 +70,7 @@ def main():
             time.sleep(args.interval)
 
     except KeyboardInterrupt:
-        print("\n🛑 Attacco Trojan interrotto dal Red Team.")
+        print("\n[STOP] Trojan injection stopped by Red Team.")
     finally:
         client.loop_stop()
         client.disconnect()

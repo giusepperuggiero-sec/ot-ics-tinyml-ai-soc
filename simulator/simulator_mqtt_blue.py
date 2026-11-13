@@ -15,9 +15,9 @@ from simulator.pump_physics import generate_pump_sample
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("Blue Team: Connesso con successo al Broker MQTT!")
+        print("[BLUE TEAM] Connected successfully to MQTT Broker!")
     else:
-        print(f"Errore di connessione: {rc}")
+        print(f"[ERROR] MQTT connection failed (rc={rc})")
 
 
 def main():
@@ -29,17 +29,17 @@ def main():
     parser.add_argument("--interval", type=float, default=2.0, help="Publish interval in seconds (default: 2.0)")
     args = parser.parse_args()
 
-    client = create_mqtt_client(client_id="BlueTeam_Simulatore")
+    client = create_mqtt_client(client_id="BlueTeam_Simulator", cfg=cfg)
     client.on_connect = on_connect
 
-    print(f"Tentativo di connessione a {args.broker}...")
+    print(f"Connecting to {args.broker}...")
     client.connect(args.broker, args.port, 60)
     client.loop_start()
 
     step_idx = 0
     try:
-        print("🟢 Inizio trasmissione dati NORMALI (Fisica Complessa in esecuzione)...")
-        print("(Premi CTRL+C per fermare)\n")
+        print("[BLUE TEAM] Starting nominal telemetry stream (thermodynamic model running)...")
+        print("(Press Ctrl+C to stop)\n")
 
         while True:
             # Generate all 10 physically coupled sensor channels validated by the Portenta H7 M7 firmware.
@@ -47,12 +47,12 @@ def main():
             payload = json.dumps(record)
             client.publish(args.topic, payload)
 
-            print(f"Blue Team Invia -> {payload[:80]}... }}")
+            print(f"Blue Team Sent -> {payload[:80]}... }}")
             step_idx += 1
             time.sleep(args.interval)
 
     except KeyboardInterrupt:
-        print("\nSimulazione terminata.")
+        print("\nSimulation stopped.")
     finally:
         client.loop_stop()
         client.disconnect()

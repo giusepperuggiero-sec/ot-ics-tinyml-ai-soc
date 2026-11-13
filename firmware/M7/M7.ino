@@ -12,8 +12,8 @@ const char* ssid = SECRET_SSID;
 const char* password = SECRET_PASS;
 const char* mqtt_server = MQTT_BROKER;
 const int mqtt_port = MQTT_PORT;
-const char* topic_telemetria = MQTT_TOPIC_TELEMETRY;
-const char* topic_allarmi = MQTT_TOPIC_ALARMS;
+const char* topic_telemetry = MQTT_TOPIC_TELEMETRY;
+const char* topic_alarms = MQTT_TOPIC_ALARMS;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -22,7 +22,7 @@ PubSubClient client(espClient);
 // 1. STATE AND SECURITY VARIABLES
 // ==========================================================================
 // Physical inertia tracking
-float last_pressione_m = -1.0f;
+float last_discharge_pressure = -1.0f;
 float last_rpm = -1.0f;
 
 // Differential baseline history buffer for the cloud AI SIEM (always valid JSON)
@@ -69,7 +69,7 @@ String buildDossierJSON(const String& event, const String& severity, const Strin
   json = "{";
   json += "\"timestamp\":\"" + String(millis()) + "\",";
   json += "\"device\":\"Portenta_H7\",";
-  json += "\"asset\":\"Pompa_1_Acqua\",";
+  json += "\"asset\":\"Water_Pump_01\",";
   json += "\"layer\":\"process\",";
   json += "\"data_source\":\"mqtt_network_interface\",";
   json += "\"input_format\":\"json_payload\",";
@@ -109,7 +109,7 @@ String checkBounds(const String& sensor_name, float val, float min_val, float ma
 // ==========================================================================
 // 3. PAYLOAD ANALYSIS AND VALIDATION ENGINE
 // ==========================================================================
-String analizzaDati(const String& message) {
+String analyzeTelemetryPayload(const String& message) {
   if (message.length() < 50 || message.length() > 1024) {
     String det = "{\"error\":\"payload_size_out_of_bounds\", \"observed_length\":" + String(message.length()) + "}";
     return buildDossierJSON("structural_anomaly", "Medium", det, message);
@@ -184,14 +184,14 @@ String analizzaDati(const String& message) {
   boundsErr = checkBounds("S9_Temp_Motore_C", s9, -20.0f, 150.0f, "C"); if (boundsErr != "") return buildDossierJSON("sensor_threshold_exceeded", "Critical", boundsErr, message);
   boundsErr = checkBounds("S10_Efficienza_Pct", s10, 0.0f, 100.0f, "%"); if (boundsErr != "") return buildDossierJSON("sensor_threshold_exceeded", "Critical", boundsErr, message);
 
-  if (last_pressione_m >= 0.0f) {
-    float deltaP = fabsf(s4 - last_pressione_m);
+  if (last_discharge_pressure >= 0.0f) {
+    float deltaP = fabsf(s4 - last_discharge_pressure);
     if (deltaP > 6.0f) {
       String det = "{\"sensor\":\"S4_Pres_Mandata_bar\", \"error\":\"impossible_gradient_spike\", \"observed_delta\":" + String(deltaP) + ", \"max_allowed_delta\":6.0}";
       return buildDossierJSON("kinetics_violation", "Critical", det, message);
     }
   }
-  last_pressione_m = s4;
+  last_discharge_pressure = s4;
 
   if (last_rpm >= 0.0f) {
     float deltaRpm = fabsf(s1 - last_rpm);
@@ -232,23 +232,23 @@ String analizzaDati(const String& message) {
 // ==========================================================================
 void setup_wifi() {
   delay(10);
-  Serial.println("Connessione a WiFi...");
+  Serial.println("Connecting to Wi-Fi...");
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nWiFi Connesso!");
+  Serial.println("\nWi-Fi Connected!");
 }
 
 bool attempt_mqtt_connect() {
-  Serial.print("Connessione MQTT...");
+  Serial.print("Connecting to MQTT broker...");
   if (client.connect("Portenta_M7_BlueTeam")) {
-    Serial.println("Connesso!");
-    client.subscribe(topic_telemetria);
+    Serial.println("Connected!");
+    client.subscribe(topic_telemetry);
     return true;
   }
-  Serial.print("Fallita (rc=");
+  Serial.print("Failed (rc=");
   Serial.print(client.state());
   Serial.println(")");
   return false;
@@ -272,7 +272,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
     if (!isUnderAttack) {
       isUnderAttack = true;
-      Serial.println("\n [M7 - SECURITY ALERT] ATTACCO DoS INIZIATO! Avvio mitigazione...");
+      Serial.println("\n[M7 - SECURITY ALERT] DoS FLOOD STARTED! Mitigation active...");
 
       String det = "{";
       det += "\"error\":\"volumetric_flooding\",";
@@ -283,7 +283,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
       // Pass an empty string "" so raw_payload and baseline_history are omitted from DoS alerts
       String dos_alert = buildDossierJSON("rate_limit_exceeded", "Critical", det, "");
-      client.publish(topic_allarmi, dos_alert.c_str());
+      client.publish(topic_alarms, dos_alert.c_str());
     }
     return; // Drop packet silently during active flooding
   }
@@ -294,7 +294,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if (length > MAX_INGRESS_BYTES) {
     String det = "{\"error\":\"payload_size_out_of_bounds\", \"observed_length\":" + String(length) + "}";
     String alert_payload = buildDossierJSON("structural_anomaly", "High", det, "[TRUNCATED_OVERSIZED_PAYLOAD]");
-    client.publish(topic_allarmi, alert_payload.c_str());
+    client.publish(topic_alarms, alert_payload.c_str());
     return;
   }
 
@@ -304,14 +304,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
     message += (char)payload[i];
   }
 
-  String alert_payload = analizzaDati(message);
+  String alert_payload = analyzeTelemetryPayload(message);
 
   if (alert_payload == "") {
     lastValidPayload = message;
-    Serial.println("[M7]  Pacchetto validato. Baseline aggiornata.");
+    Serial.println("[M7] Packet validated. Baseline updated.");
   } else {
-    Serial.println("[M7]  Anomalia rilevata! Inoltro dossier forense al SIEM (LLM)...");
-    client.publish(topic_allarmi, alert_payload.c_str());
+    Serial.println("[M7] Anomaly detected! Forwarding forensic dossier to SIEM (LLM)...");
+    client.publish(topic_alarms, alert_payload.c_str());
   }
 }
 
@@ -340,7 +340,7 @@ void loop() {
   // --- CHECK DOS ATTACK RECOVERY TIMEOUT ---
   if (isUnderAttack && (now - lastDosPacketTime > ATTACK_RESET_MS)) {
     isUnderAttack = false;
-    Serial.println(" [M7 - SECURITY INFO] Ondata DoS terminata. Traffico rientrato nei parametri nominali.\n");
+    Serial.println("[M7 - SECURITY INFO] DoS wave ended. Traffic returned to nominal bounds.\n");
   }
 }
 

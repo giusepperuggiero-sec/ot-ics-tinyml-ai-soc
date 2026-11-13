@@ -26,41 +26,41 @@ def generate_pump_sample(
     # 1. Macro-cycles: work shifts and cosine ambient thermal curve
     if 8 <= hour <= 18:
         rpm_base = 2900
-        rumore_rpm = 15.0
+        rpm_noise = 15.0
     else:
         rpm_base = 1450
-        rumore_rpm = 8.0
+        rpm_noise = 8.0
 
-    temp_ambientale_delta = 7.0 * math.cos((hour - 14) * math.pi / 12.0)
+    ambient_temp_delta = 7.0 * math.cos((hour - 14) * math.pi / 12.0)
 
     # 2. Micro-cycles & hydraulic affinity laws
-    fluttuazione_breve = math.sin(step_idx * 0.05) * (30 if rpm_base == 2900 else 10)
-    rpm = rpm_base + fluttuazione_breve + random.normalvariate(0, rumore_rpm)
-    rapporto_rpm = rpm / 2900.0
+    short_fluctuation = math.sin(step_idx * 0.05) * (30 if rpm_base == 2900 else 10)
+    rpm = rpm_base + short_fluctuation + random.normalvariate(0, rpm_noise)
+    rpm_ratio = rpm / 2900.0
 
-    corrente = 15.0 * (rapporto_rpm ** 3) + random.normalvariate(0, 0.2) + (wear_factor * 0.5)
-    pressione_aspirazione = 1.5 - (rapporto_rpm - 1.0) * 0.2 + random.normalvariate(0, 0.05)
-    pressione_mandata = 6.0 * (rapporto_rpm ** 2) + random.normalvariate(0, 0.1) - (wear_factor * 0.2)
-    portata = 250.0 * rapporto_rpm + random.normalvariate(0, 3.0)
+    current_a = 15.0 * (rpm_ratio ** 3) + random.normalvariate(0, 0.2) + (wear_factor * 0.5)
+    suction_pressure = 1.5 - (rpm_ratio - 1.0) * 0.2 + random.normalvariate(0, 0.05)
+    discharge_pressure = 6.0 * (rpm_ratio ** 2) + random.normalvariate(0, 0.1) - (wear_factor * 0.2)
+    flow_rate = 250.0 * rpm_ratio + random.normalvariate(0, 3.0)
 
-    temperatura_fluido = (
-        25.0 + temp_ambientale_delta + (corrente * 0.1) - (portata * 0.005) + random.normalvariate(0, 0.2)
+    fluid_temp = (
+        25.0 + ambient_temp_delta + (current_a * 0.1) - (flow_rate * 0.005) + random.normalvariate(0, 0.2)
     )
 
-    vibrazione_base = 1.2 * (rapporto_rpm ** 1.5) + (wear_factor * 0.8)
-    vibrazione_cuscinetto_ant = vibrazione_base + random.normalvariate(0, 0.1)
-    vibrazione_cuscinetto_post = (vibrazione_cuscinetto_ant * 0.85) + random.normalvariate(0, 0.08)
+    base_vibration = 1.2 * (rpm_ratio ** 1.5) + (wear_factor * 0.8)
+    front_bearing_vib = base_vibration + random.normalvariate(0, 0.1)
+    rear_bearing_vib = (front_bearing_vib * 0.85) + random.normalvariate(0, 0.08)
 
-    temperatura_motore = (
+    motor_temp = (
         45.0
-        + temp_ambientale_delta
-        + (corrente - 15.0) * 1.5
+        + ambient_temp_delta
+        + (current_a - 15.0) * 1.5
         + (wear_factor * 2.0)
         + random.normalvariate(0, 0.5)
     )
-    efficienza = (
+    efficiency = (
         88.0
-        - (temperatura_motore - 45.0) * 0.2
+        - (motor_temp - 45.0) * 0.2
         - abs(rpm_base - rpm) * 0.01
         - (wear_factor * 3.0)
         + random.normalvariate(0, 0.3)
@@ -70,15 +70,15 @@ def generate_pump_sample(
         "timestamp": timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         "sensori": {
             "S1_Pompa_RPM": round(rpm, 2),
-            "S2_Corrente_A": round(corrente, 2),
-            "S3_Pres_Aspirazione_bar": round(pressione_aspirazione, 2),
-            "S4_Pres_Mandata_bar": round(pressione_mandata, 2),
-            "S5_Portata_Lmin": round(portata, 2),
-            "S6_Temp_Fluido_C": round(temperatura_fluido, 2),
-            "S7_Vib_Cuscinetto_Ant_mms": round(vibrazione_cuscinetto_ant, 2),
-            "S8_Vib_Cuscinetto_Post_mms": round(vibrazione_cuscinetto_post, 2),
-            "S9_Temp_Motore_C": round(temperatura_motore, 2),
-            "S10_Efficienza_Pct": round(efficienza, 2),
+            "S2_Corrente_A": round(current_a, 2),
+            "S3_Pres_Aspirazione_bar": round(suction_pressure, 2),
+            "S4_Pres_Mandata_bar": round(discharge_pressure, 2),
+            "S5_Portata_Lmin": round(flow_rate, 2),
+            "S6_Temp_Fluido_C": round(fluid_temp, 2),
+            "S7_Vib_Cuscinetto_Ant_mms": round(front_bearing_vib, 2),
+            "S8_Vib_Cuscinetto_Post_mms": round(rear_bearing_vib, 2),
+            "S9_Temp_Motore_C": round(motor_temp, 2),
+            "S10_Efficienza_Pct": round(efficiency, 2),
         },
     }
 
