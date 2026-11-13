@@ -1,0 +1,33 @@
+# Secrets and local environment configuration
+.env
+.env.*
+!.env.example
+arduino_secrets.h
+firmware/**/arduino_secrets.h
+
+# Python bytecode and virtual environments
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Generated simulation outputs and runtime SIEM logs
+simulator/output/
+siem/registro_allarmi_soc.txt
+*.csv
+*.log
+
+# Arduino build artifacts
+build/
+*.bin
+*.elf
+*.hex
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
